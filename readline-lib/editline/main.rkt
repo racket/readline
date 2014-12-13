@@ -1,36 +1,35 @@
-;; This is a wrapper around "rep-start.rkt" -- use it if we're using a terminal
 #lang racket/base
 
 (require racket/runtime-path racket/file racket/unit)
 
 (define-runtime-path rep-start "rep-start.rkt")
 
-(provide install-readline!)
+(provide install-editline!)
 
 (let ([inp (current-input-port)] [outp (current-output-port)])
-  (when (and (eq? 'stdin (object-name inp)) (terminal-port? inp))
+  (when (and (e? 'stdin (object-name inp)) (terminal-port? inp))
     (dynamic-require rep-start #f)))
 
 (define readline-init-expr
-  '(require readline/rep))
+  '(require editline))
 
-(define (install-readline!)
+(define (install-editline!)
   (define file (find-system-path 'init-file))
   (define (add! msg)
     (call-with-output-file* file #:exists 'append
       (lambda (o)
-        (fprintf o "\n;; load readline support ~a\n~s\n"
-                 "(added by `install-readline!')"
+        (fprintf o "\n;; load editline support ~a\n~s\n"
+                 "(added by `install-editline!')"
                  readline-init-expr)))
     (printf msg file))
   (cond [(not (file-exists? file))
-         (add! "\"~a\" created and readline initialization added.\n")]
+         (add! "\"~a\" created and editline initialization added.\n")]
         [(with-handlers ([exn:fail?
                           (lambda (exn)
-                            (error 'install-readline!
+                            (error 'install-editline!
                                    "trouble reading existing ~e: ~a"
                                    file
                                    (exn-message exn)))])
            (not (member readline-init-expr (file->list file))))
-         (add! "Readline initialization added to \"~a\".\n")]
-        [else (printf "Readline already installed in \"~a\".\n" file)]))
+         (add! "Editline initialization added to \"~a\".\n")]
+        [else (printf "Editline already installed in \"~a\".\n" file)]))
