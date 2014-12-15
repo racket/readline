@@ -7,7 +7,7 @@
 (provide install-editline!)
 
 (let ([inp (current-input-port)] [outp (current-output-port)])
-  (when (and (e? 'stdin (object-name inp)) (terminal-port? inp))
+  (when (and (eq? 'stdin (object-name inp)) (terminal-port? inp))
     (dynamic-require rep-start #f)))
 
 (define readline-init-expr
