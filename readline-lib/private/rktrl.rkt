@@ -11,7 +11,7 @@
   (void (ffi-lib "libcurses" #:fail (lambda () #f)))
   (void (ffi-lib "libtermcap" #:fail (lambda () #f)))
 
-  (define libreadline (ffi-lib "libedit" '("5" "6" "4" "")
+  (define libreadline (ffi-lib libreadline-path '("5" "6" "4" "")
                                #:fail (lambda () #f)))
 
   (unless libreadline
