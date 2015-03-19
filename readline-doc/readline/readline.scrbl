@@ -268,6 +268,14 @@ following:
       (end-atomic))))]}
 
 
+@defparam[match-paren-timeout timeout (or/c #f (>=/c 0))
+          #:value 500]{
+
+Sets the length of time in milliseconds that the cursor should blink
+when matching parentheses are typed in the line editor. When @racket[timeout]
+is @racket[#f], parenthesis matching is disabled.}
+
+
 @section[#:tag "readline-license"]{License Issues}
 
 GNU's @|readline| library is covered by the GPL, and that applies to
