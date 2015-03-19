@@ -5,7 +5,8 @@
          add-history add-history-bytes
          history-length history-get history-delete
          set-completion-function!
-         readline-newline readline-redisplay)
+         readline-newline readline-redisplay
+         match-paren-timeout)
 
 ;; libncurses and/or libtermcap needed on some platforms
 (void (ffi-lib "libcurses" #:fail (lambda () #f)))
@@ -140,3 +141,68 @@
 ;; force redisplay of prompt and current user input
 (define readline-redisplay
   (get-ffi-obj "rl_forced_update_display" libreadline (_fun -> _void)))
+
+;; support for bouncing/matching parens, with some inspiration from
+;; Guile's readline support
+
+;; timeout in milliseconds
+(define match-paren-timeout (make-parameter 500))
+
+;; these internal bindings aren't for export
+(define rl-buffer (ffi-obj #"rl_line_buffer" libreadline))
+(define rl-point  (ffi-obj #"rl_point" libreadline))
+
+(define rl-redisplay (get-ffi-obj #"rl_redisplay" libreadline (_fun -> _void)))
+(define rl-bind-key  (get-ffi-obj #"rl_bind_key" libreadline
+                                  (_fun _int (_fun _int _int -> _void)
+                                        -> _void)))
+(define rl-insert    (get-ffi-obj #"rl_insert" libreadline
+                                  (_fun _int _int -> _void)))
+
+(define open-paren-code    (char->integer #\())
+(define open-bracket-code  (char->integer #\[))
+(define open-brace-code    (char->integer #\{))
+(define close-paren-code   (char->integer #\)))
+(define close-bracket-code (char->integer #\]))
+(define close-brace-code   (char->integer #\}))
+
+;; int? int? -> void?
+;; Matches parentheses in the buffer and flashes the current pair when a
+;; new closing paren is typed. Ignores the first argument and the second
+;; argument should be the key passed from readline.
+(define (match-parens _ char)
+  (define cur-point (ptr-ref rl-point _int))
+  (rl-insert 1 char)
+  (when (and (match-paren-timeout)
+             (or (= char close-paren-code)
+                 (= char close-bracket-code)
+                 (= char close-brace-code)))
+    (define new-point
+      (let loop ([point (sub1 cur-point)] ; start before new character
+                 [close-parens 0])
+        (if (= point -1) ; don't flash after going off the end
+            #f
+            (let ([point-char (ptr-ref (ptr-ref rl-buffer _pointer)
+                                       _byte point)])
+              (cond [(or (and (= char close-paren-code)
+                              (= point-char open-paren-code))
+                         (and (= char close-bracket-code)
+                              (= point-char open-bracket-code))
+                         (and (= char close-brace-code)
+                              (= point-char open-brace-code)))
+                     (if (zero? close-parens)
+                         point
+                         (loop (sub1 point) (sub1 close-parens)))]
+                    [(= point-char char)
+                     (loop (sub1 point) (add1 close-parens))]
+                    [else (loop (sub1 point) close-parens)])))))
+    (when new-point
+      (ptr-set! rl-point _int new-point)
+      (rl-redisplay)
+      (sleep (/ (match-paren-timeout) 1000))
+      ;; move to after the newly inserted character
+      (ptr-set! rl-point _int (add1 cur-point)))))
+
+(rl-bind-key close-paren-code   match-parens)
+(rl-bind-key close-bracket-code match-parens)
+(rl-bind-key close-brace-code   match-parens)
