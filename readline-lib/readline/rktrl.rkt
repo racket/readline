@@ -176,32 +176,71 @@
   (when (and (match-paren-timeout)
              (or (= char close-paren-code)
                  (= char close-bracket-code)
-                 (= char close-brace-code)))
-    (define new-point
-      (let loop ([point (sub1 cur-point)] ; start before new character
-                 [close-parens 0])
-        (if (= point -1) ; don't flash after going off the end
-            #f
-            (let ([point-char (ptr-ref (ptr-ref rl-buffer _pointer)
-                                       _byte point)])
-              (cond [(or (and (= char close-paren-code)
-                              (= point-char open-paren-code))
-                         (and (= char close-bracket-code)
-                              (= point-char open-bracket-code))
-                         (and (= char close-brace-code)
-                              (= point-char open-brace-code)))
-                     (if (zero? close-parens)
-                         point
-                         (loop (sub1 point) (sub1 close-parens)))]
-                    [(= point-char char)
-                     (loop (sub1 point) (add1 close-parens))]
-                    [else (loop (sub1 point) close-parens)])))))
+                 (= char close-brace-code))
+             ;; don't try to match if the user typed #\)
+             (not (and (>= cur-point 2)
+                       (= (buffer-ref (- cur-point 1))
+                          (char->integer #\\))
+                       (= (buffer-ref (- cur-point 2))
+                          (char->integer #\#)))))
+    (define new-point (find-match cur-point char))
     (when new-point
       (ptr-set! rl-point _int new-point)
       (rl-redisplay)
       (sleep (/ (match-paren-timeout) 1000))
       ;; move to after the newly inserted character
       (ptr-set! rl-point _int (add1 cur-point)))))
+
+;; exact-integer? byte? -> exact-integer?
+;; Find the index in the readline buffer of the matching paren or
+;; #f if it does not exist.
+(define (find-match point char)
+  (let loop ([point (sub1 point)] ; start before new character
+             [close-parens 0])
+    (if (= point -1) ; don't flash after going off the end
+        #f
+        (let ([point-char (buffer-ref point)])
+          (cond ;; skip strings and byte strings
+                [(= point-char (char->integer #\"))
+                 (loop (skip-string-or-bytes point) close-parens)]
+                ;; skip literal characters
+                [(and (>= point 2)
+                      (= (buffer-ref (- point 1)) (char->integer #\\))
+                      (= (buffer-ref (- point 2)) (char->integer #\#)))
+                 (loop (- point 3) close-parens)]
+                ;; skip '|| symbols
+                [(and (>= point 2)
+                      (= (buffer-ref (- point 1)) (char->integer #\|))
+                      (= (buffer-ref (- point 2)) (char->integer #\')))
+                 (loop (- point 3) close-parens)]
+                ;; track and skip matching pairs
+                [(= point-char char)
+                 (loop (sub1 point) (add1 close-parens))]
+                [(or (and (= char close-paren-code)
+                          (= point-char open-paren-code))
+                     (and (= char close-bracket-code)
+                          (= point-char open-bracket-code))
+                     (and (= char close-brace-code)
+                          (= point-char open-brace-code)))
+                 (if (zero? close-parens)
+                     point
+                     (loop (sub1 point) (sub1 close-parens)))]
+                [else (loop (sub1 point) close-parens)])))))
+
+;; exact-integer? -> exact-integer?
+;; Skip a Racket string of byte string in the readline buffer
+(define (skip-string-or-bytes point)
+  (let loop ([point (sub1 point)])
+    (cond [(< point 0) ; went off end, no string found
+           point]
+          [(= (buffer-ref point) (char->integer #\"))
+           (sub1 point)]
+          [else (loop (sub1 point))])))
+
+;; exact-integer? -> byte?
+;; Dereference a byte in the readline buffer
+(define (buffer-ref idx)
+  (ptr-ref (ptr-ref rl-buffer _pointer) _byte idx))
 
 ;; bind a startup hook to install the paren matching in the right keymap
 (set-ffi-obj! "rl_startup_hook" libreadline (_fun -> _void)
