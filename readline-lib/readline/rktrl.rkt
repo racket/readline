@@ -203,6 +203,9 @@
       ;; move to after the newly inserted character
       (ptr-set! rl-point _int (add1 cur-point)))))
 
-(rl-bind-key close-paren-code   match-parens)
-(rl-bind-key close-bracket-code match-parens)
-(rl-bind-key close-brace-code   match-parens)
+;; bind a startup hook to install the paren matching in the right keymap
+(set-ffi-obj! "rl_startup_hook" libreadline (_fun -> _void)
+              (lambda ()
+                (rl-bind-key close-paren-code   match-parens)
+                (rl-bind-key close-bracket-code match-parens)
+                (rl-bind-key close-brace-code   match-parens)))
