@@ -1,6 +1,7 @@
 #lang racket/base
 
-(require ffi/unsafe (only-in '#%foreign ffi-obj))
+(require ffi/unsafe (only-in '#%foreign ffi-obj)
+         syntax-color/racket-lexer)
 (provide readline readline-bytes
          add-history add-history-bytes
          history-length history-get history-delete
@@ -159,13 +160,6 @@
 (define rl-insert    (get-ffi-obj #"rl_insert" libreadline
                                   (_fun _int _int -> _void)))
 
-(define open-paren-code    (char->integer #\())
-(define open-bracket-code  (char->integer #\[))
-(define open-brace-code    (char->integer #\{))
-(define close-paren-code   (char->integer #\)))
-(define close-bracket-code (char->integer #\]))
-(define close-brace-code   (char->integer #\}))
-
 ;; int? int? -> void?
 ;; Matches parentheses in the buffer and flashes the current pair when a
 ;; new closing paren is typed. Ignores the first argument and the second
@@ -173,16 +167,7 @@
 (define (match-parens _ char)
   (define cur-point (ptr-ref rl-point _int))
   (rl-insert 1 char)
-  (when (and (match-paren-timeout)
-             (or (= char close-paren-code)
-                 (= char close-bracket-code)
-                 (= char close-brace-code))
-             ;; don't try to match if the user typed #\)
-             (not (and (>= cur-point 2)
-                       (= (buffer-ref (- cur-point 1))
-                          (char->integer #\\))
-                       (= (buffer-ref (- cur-point 2))
-                          (char->integer #\#)))))
+  (when (match-paren-timeout)
     (define new-point (find-match cur-point char))
     (when new-point
       (ptr-set! rl-point _int new-point)
@@ -191,51 +176,54 @@
       ;; move to after the newly inserted character
       (ptr-set! rl-point _int (add1 cur-point)))))
 
-;; exact-integer? byte? -> exact-integer?
+;; exact-integer? byte? -> (or/c #f exact-integer?)
 ;; Find the index in the readline buffer of the matching paren or
 ;; #f if it does not exist.
 (define (find-match point char)
-  (let loop ([point (sub1 point)] ; start before new character
-             [close-parens 0])
-    (if (= point -1) ; don't flash after going off the end
-        #f
-        (let ([point-char (buffer-ref point)])
-          (cond ;; skip strings and byte strings
-                [(= point-char (char->integer #\"))
-                 (loop (skip-string-or-bytes point) close-parens)]
-                ;; skip literal characters
-                [(and (>= point 2)
-                      (= (buffer-ref (- point 1)) (char->integer #\\))
-                      (= (buffer-ref (- point 2)) (char->integer #\#)))
-                 (loop (- point 3) close-parens)]
-                ;; skip '|| symbols
-                [(and (>= point 2)
-                      (= (buffer-ref (- point 1)) (char->integer #\|))
-                      (= (buffer-ref (- point 2)) (char->integer #\')))
-                 (loop (- point 3) close-parens)]
-                ;; track and skip matching pairs
-                [(= point-char char)
-                 (loop (sub1 point) (add1 close-parens))]
-                [(or (and (= char close-paren-code)
-                          (= point-char open-paren-code))
-                     (and (= char close-bracket-code)
-                          (= point-char open-bracket-code))
-                     (and (= char close-brace-code)
-                          (= point-char open-brace-code)))
-                 (if (zero? close-parens)
-                     point
-                     (loop (sub1 point) (sub1 close-parens)))]
-                [else (loop (sub1 point) close-parens)])))))
+  (define input (buffer->input-port point))
+  (define target-sym (byte->symbol char))
+  (let loop ([stack null] [last-match #f])
+    (define-values (match type paren-kind start end)
+      (racket-lexer input))
+    (cond [(eof-object? match)
+           ;; check that the match, if it exists, is actually a match
+           ;; for the new inserted character (by position in the buffer)
+           (and last-match
+                (eq? target-sym (car (cadr last-match)))
+                ;; the lexer is 1-indexed, so subtract for 0-index
+                (= point (sub1 (cadr (cadr last-match))))
+                (sub1 (cadr (car last-match))))]
+          [(eq? type 'parenthesis)
+           ;; matching pairs are removed from the stack, but remembered
+           ;; for the end in case it's the new character and its match
+           (if (and (not (null? stack))
+                    (matching-paren? (caar stack) paren-kind))
+               (loop (cdr stack)
+                     (list (car stack) `(,paren-kind ,start)))
+               (loop (cons `(,paren-kind ,start) stack)
+                     last-match))]
+          [else (loop stack last-match)])))
 
-;; exact-integer? -> exact-integer?
-;; Skip a Racket string of byte string in the readline buffer
-(define (skip-string-or-bytes point)
-  (let loop ([point (sub1 point)])
-    (cond [(< point 0) ; went off end, no string found
-           point]
-          [(= (buffer-ref point) (char->integer #\"))
-           (sub1 point)]
-          [else (loop (sub1 point))])))
+;; symbol? symbol? -> boolean?
+;; Test if two parentheses are a matching pair
+(define (matching-paren? p1 p2)
+  (or (and (eq? p1 '|(|) (eq? p2 '|)|))
+      (and (eq? p1 '|[|) (eq? p2 '|]|))
+      (and (eq? p1 '|{|) (eq? p2 '|}|))))
+
+;; byte? -> symbol?
+;; Convert a character code for a parenthesis to a symbol
+(define (byte->symbol byte)
+  (string->symbol (make-string 1 (integer->char byte))))
+
+;; exact-integer? -> input-port
+;; Turn the readline buffer contents into an input port from
+;; the start up to the specified point
+(define (buffer->input-port point)
+  (define buffer-string
+    (list->string (for/list ([idx (in-range (add1 point))])
+                    (integer->char (buffer-ref idx)))))
+  (open-input-string buffer-string))
 
 ;; exact-integer? -> byte?
 ;; Dereference a byte in the readline buffer
@@ -243,6 +231,10 @@
   (ptr-ref (ptr-ref rl-buffer _pointer) _byte idx))
 
 ;; bind a startup hook to install the paren matching in the right keymap
+(define close-paren-code   (char->integer #\)))
+(define close-bracket-code (char->integer #\]))
+(define close-brace-code   (char->integer #\}))
+
 (set-ffi-obj! "rl_startup_hook" libreadline (_fun -> _void)
               (lambda ()
                 (rl-bind-key close-paren-code   match-parens)
