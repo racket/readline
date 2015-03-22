@@ -5,5 +5,5 @@
          "../private/rktpread.rkt")
 (provide (except-out (all-defined-out) readline-lib))
 
-(define readline-lib (ffi-lib "libreadline" '("5" "6" "4" "")))
+(define readline-lib (ffi-lib "libreadline" '("3" "2" "")))
 (define-values/invoke-unit/infer pread@)
