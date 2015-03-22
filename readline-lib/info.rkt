@@ -1,7 +1,7 @@
 #lang info
 
 (define collection 'multi)
-(define deps '("base" "syntax-color-lib"))
+(define deps '("base"))
 
 (define pkg-desc "implementation (no documentation) part of \"readline\"")
 
