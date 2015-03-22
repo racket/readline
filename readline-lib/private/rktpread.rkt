@@ -1,5 +1,7 @@
 #lang racket/base
 
+; Parenthesized wrapper around the readline wrappers.
+
 (require "rktrl.rkt" "sig.rkt" racket/list racket/file racket/unit)
 (provide pread@)
 

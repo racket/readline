@@ -1,5 +1,7 @@
 #lang racket/base
 
+; Provides racket bindings for a given implementation of readline.
+
 (require ffi/unsafe (only-in '#%foreign ffi-obj) racket/unit "sig.rkt")
 (provide readline@)
 
@@ -11,8 +13,7 @@
   (void (ffi-lib "libcurses" #:fail (lambda () #f)))
   (void (ffi-lib "libtermcap" #:fail (lambda () #f)))
 
-  (define libreadline (ffi-lib libreadline-path '("5" "6" "4" "")
-                               #:fail (lambda () #f)))
+  (define libreadline readline-lib)
 
   (unless libreadline
     (log-warning "mzrl warning: could not load libedit"))

@@ -1,7 +1,9 @@
 #lang racket/base
+(require racket/unit
+         ffi/unsafe
+         (only-in '#%foreign ffi-obj)
+         "../private/rktrl.rkt")
+(provide (except-out (all-defined-out) readline-lib))
 
-(require "../private/rktrl.rkt" racket/unit)
-(provide (except-out (all-defined-out) libreadline-path))
-
-(define libreadline-path "libedit")
+(define readline-lib (ffi-lib "libedit" '("5" "6" "4" "")))
 (define-values/invoke-unit/infer readline@)

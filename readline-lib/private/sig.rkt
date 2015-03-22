@@ -1,5 +1,7 @@
 #lang racket/base
 
+;; Provides signatures for the readline and pread units.
+
 (require racket/unit)
 
 (provide (all-defined-out))
@@ -17,7 +19,7 @@
    readline-redisplay))
 
 (define-signature readline-lib^
-  (libreadline-path))
+  (readline-lib))
 
 (define-signature pread^
   (current-prompt
