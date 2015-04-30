@@ -1,6 +1,8 @@
 #lang racket/base
 
-(require ffi/unsafe (only-in '#%foreign ffi-obj))
+(require ffi/unsafe
+         (only-in '#%foreign ffi-obj)
+         setup/dirs)
 (provide readline readline-bytes
          add-history add-history-bytes
          history-length history-get history-delete
@@ -11,7 +13,20 @@
 (void (ffi-lib "libcurses" #:fail (lambda () #f)))
 (void (ffi-lib "libtermcap" #:fail (lambda () #f)))
 
-(define libreadline (ffi-lib "libreadline" '("5" "6" "4" "")))
+; find-libreadline : (U path #f) -> (U ffi-lib? #f)
+(define (find-libreadline path)
+  (and path
+       (let ([libreadline (build-path path "readline-lib.rkt")])
+         (and (file-exists? libreadline)
+              (module-path? libreadline)
+              (dynamic-require libreadline 'readline-library
+                               (lambda () #f))))))
+
+(define libreadline
+  (or
+   (find-libreadline (find-user-share-dir))
+   (find-libreadline (find-share-dir))
+   (ffi-lib "libedit" '("3" "2" ""))))
 
 (define make-byte-string ; helper for the two types below
   (get-ffi-obj "scheme_make_byte_string" #f (_fun _pointer -> _scheme)))
