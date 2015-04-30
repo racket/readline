@@ -268,11 +268,11 @@ following:
       (end-atomic))))]}
 
 
-@section[#:tag "readline-license"]{License Issues}
+@section[#:tag "readline-library"]{Readline Library}
 
-GNU's @|readline| library is covered by the GPL, and that applies to
-code that links with it.  Racket is licensed with the LGPL, so the
-@|readline| code is not used by default; you should explicitly enable
-it if you want to.  Also, be aware that if you write code that uses
-this library, it will make your code link to the @|readline| library
-when invoked, with the usual GPL implications.
+Due to licensing issues, the @|readline| collection is backed by the Editline
+Library.
+To switch to GNU's @|readline| library, download the @filepath{readline-gpl}
+collection:
+
+@commandline{raco pkg install readline-gpl}
