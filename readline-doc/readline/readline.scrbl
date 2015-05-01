@@ -14,8 +14,14 @@
 @title{Readline: Terminal Interaction}
 
 The @filepath{readline} collection (not to be confused with Racket's
-@racket[read-line] function) provides glue for using GNU's @|readline|
+@racket[read-line] function) provides glue for using the Editline library
+or GNU's @|readline|
 library with the Racket @racket[read-eval-print-loop].
+
+@margin-note{Due to licensing issues, the @|readline| collection is by default
+backed by the Editline library.
+To switch to GNU's @|readline| library, install the @filepath{readline-gpl}
+package, which configures the @racket[readline] library to use @|readline|.}
 
 @section{Normal Use of @|Readline|}
 
@@ -266,13 +272,3 @@ following:
     (lambda ()
       (readline-redisplay)
       (end-atomic))))]}
-
-
-@section[#:tag "readline-library"]{Readline Library}
-
-Due to licensing issues, the @|readline| collection is backed by the Editline
-Library.
-To switch to GNU's @|readline| library, download the @filepath{readline-gpl}
-collection:
-
-@commandline{raco pkg install readline-gpl}
