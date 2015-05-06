@@ -26,6 +26,12 @@
   (or
    (find-libreadline (find-user-share-dir))
    (find-libreadline (find-share-dir))
+   ;; Old versions of libedit have a 1 indexed history rather than a 0 indexed history.
+   ;; Thus, if the user is running an old version of libedit, fail to load the module.
+   ;; XREPL should still run without linediting support.
+   (let ([lib (ffi-lib "libedit" '("2.11"))])
+     (raise-user-error "libedit version 2.11 not supported, consider using the readline-gpl package")
+     lib)
    (ffi-lib "libedit" '("3" "2" ""))))
 
 (define make-byte-string ; helper for the two types below
