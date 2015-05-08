@@ -22,6 +22,10 @@
               (dynamic-require libreadline 'readline-library
                                (lambda () #f))))))
 
+;; Deal with old versions of libedit:
+;;  - history-get is 0 indexed in old versions of libedit, rather 1 indexed like in libreadline
+;;  - history-delete doesn't re-index the history buffer.
+(define old-libedit #f)
 (define libreadline
   (or
    (find-libreadline (find-user-share-dir))
@@ -29,8 +33,9 @@
    ;; Old versions of libedit have a 1 indexed history rather than a 0 indexed history.
    ;; Thus, if the user is running an old version of libedit, fail to load the module.
    ;; XREPL should still run without linediting support.
-   (let ([lib (ffi-lib "libedit" '("2.11"))])
-     (raise-user-error "libedit version 2.11 not supported, consider using the readline-gpl package")
+   (let ([lib (ffi-lib "libedit" '("2.11") #:fail (lambda () #f))])
+     (when lib
+       (set! old-libedit #t))
      lib)
    (ffi-lib "libedit" '("3" "2" ""))))
 
@@ -84,7 +89,10 @@
          [idx (cond [(<= 0 idx (sub1 len)) idx]
                     [(<= (- len) idx -1)   (+ len idx)]
                     [else (error who "index out of history range, -~a - ~a"
-                                 len (sub1 len))])])
+                                 len (sub1 len))])]
+         [idx (if (and old-libedit (equal? who 'history-get))
+                  (sub1 idx)
+                  idx)])
     (if base? (+ idx (history-base)) idx)))
 
 ;; actually, returns a pointer to a struct with the string, but all we
@@ -100,9 +108,26 @@
   (get-ffi-obj "free_history_entry" libreadline (_fun _pointer -> _void)
                ;; if not available, use free
                (lambda () free)))
+(define clear-history ; for old versions of libreadline where history-remove doesn't re-index history0
+  (get-ffi-obj "clear_history" libreadline (_fun -> _void)))
 
+;; If libedit is old, history-remove doesn't properly re-index buffer, so clear it and
+;; re-add everything except the removed element
 (define (history-delete idx)
-  (history-free (history-remove idx)))
+  (cond
+    [old-libedit
+     (define len (history-length))
+     (define idx* (hist-idx 'history-get idx #t))
+     (define new-hist
+       (for/list ([i (in-range len)]
+                  #:unless (= i idx*))
+         (history-get i)))
+     (clear-history)
+     (for ([i new-hist])
+       (add-history i))]
+    [else
+     (let ([line (history-remove idx)])
+        (and line (history-free line)))]))
 
 ;; Simple completion: use this with a (string -> (list-of string)) function
 ;; that returns the completions for a given string (can be used with other
