@@ -28,6 +28,9 @@
 (define old-libedit #f)
 (define libreadline
   (or
+   (let ([readline-path (getenv "PLT_READLINE_LIB")])
+     (and readline-path
+          (ffi-lib readline-path (lambda () #f))))
    (find-libreadline (find-user-share-dir))
    (find-libreadline (find-share-dir))
    ;; Old versions of libedit have a 1 indexed history rather than a 0 indexed history.
