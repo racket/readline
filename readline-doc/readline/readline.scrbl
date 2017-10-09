@@ -62,9 +62,11 @@ example:
 
 The @racketmodname[readline] library automatically checks whether the
 current input port is a terminal, as determined by
-@racket[terminal-port?], and it installs @|readline| only to replace
-terminal ports.  The @racketmodname[readline/rep-start] module
-installs @|readline| without a terminal check.
+@racket[terminal-port?], and also checks that its name, as determined
+by @racket[object-name], is @racket['stdin], and it installs
+@|readline| only to replace the stdin terminal port.  The
+@racketmodname[readline/rep-start] module installs @|readline| without
+a terminal check.
 
 By default, @|readline|'s completion is set to use the visible
 bindings in the current namespace. This is far from ideal, but it's
@@ -100,6 +102,22 @@ file.
 For more fine-grained control, such as conditionally loading
 @|readline| based on an environment variable, edit
 @filepath{~/.racketrc} manually.}
+
+@defthing[pre-readline-input-port (or/c input-port? false/c)]{
+If required through @racketmodname[readline/rep-start], it will always
+be the input port replaced by the readline input port.
+
+If required through @racketmodname[readline], it will be an input port
+only when the @racket[current-input-port] is actually replaced.
+Otherwise it is @racket[#f].
+
+Using @racket[pre-readline-input-port] is useful for sending the
+original stdin to subprocesses.  Subprocesses generally require an
+input port backed by a file descriptor, and many interactive programs
+behave differently when they have a terminal file descriptor.
+Otherwise @racket[pre-readline-input-port] should not be used, as
+reading from it will interfere with the readline port.
+}
 
 @section{Interacting with the @|Readline|-Enabled Input Port }
 
