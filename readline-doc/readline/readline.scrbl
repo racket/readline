@@ -104,20 +104,21 @@ For more fine-grained control, such as conditionally loading
 @filepath{~/.racketrc} manually.}
 
 @defthing[pre-readline-input-port (or/c input-port? false/c)]{
-If required through @racketmodname[readline/rep-start], it will always
+If required through @racketmodname[readline/rep-start], @racket[pre-readline-input-port] will always
 be the input port replaced by the readline input port.
 
-If required through @racketmodname[readline], it will be an input port
+If required through @racketmodname[readline], @racket[pre-readline-input-port] will be an input port
 only when the @racket[current-input-port] is actually replaced.
-Otherwise it is @racket[#f].
+Otherwise, it is @racket[#f].
 
 Using @racket[pre-readline-input-port] is useful for sending the
 original stdin to subprocesses.  Subprocesses generally require an
 input port backed by a file descriptor, and many interactive programs
 behave differently when they have a terminal file descriptor.
-Otherwise @racket[pre-readline-input-port] should not be used, as
+Otherwise, @racket[pre-readline-input-port] should not be used, as
 reading from it will interfere with the readline port.
-}
+
+@history[#:added "1.1"]}
 
 @section{Interacting with the @|Readline|-Enabled Input Port }
 
