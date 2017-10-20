@@ -268,6 +268,16 @@ Sets @|readline|'s @tt{rl_completion_entry_function} to
 from @racketmodname[ffi/unsafe], determines the type of value supplied
 to the @racket[proc].}
 
+@defproc[(set-completion-append-character! [c char?])
+         void?]{
+Sets @|readline|'s @tt{rl_completion_append_character} to
+@racket[c].  The value is reset by the readline library, so it must
+be set inside a completion function each time it is called.
+The default is @racket[#\space].  Set it to @racket[#\null] to
+have no character appended to the completion result.
+
+@history[#:added "1.1"]}
+
 @defproc[(readline-newline) void?]{
 
 Sets the cursor to the start of a new line.}
