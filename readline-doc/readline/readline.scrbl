@@ -276,6 +276,29 @@ be set inside a completion function each time it is called.
 The default is @racket[#\space].  Set it to @racket[#\null] to
 have no character appended to the completion result.
 
+The @tt{rl_completion_append_character} is used by the readline
+library whenever a completion function returns a single option, and it
+is therefore chosen.  The choice will be filled in on the command
+line, and then the @tt{rl_completion_append_character} is
+appended.
+
+As an example, you could set the completion append character to a
+slash when completing the name of a directory, a space when you know
+the user will want to write another argument, or @racket[#\null] to
+avoid appending when a user might want to write something directly
+after the completion, such as punctuation or an extension of a word.
+
+If you want to make a completion function to more easily write the
+names of your favorite characters (and share your excitement about
+them), a use of @racket[set-completion-append-character!] may look
+like this:
+
+@racketblock[
+(define (christmas-character-complete name-str)
+  (set-completion-append-character! #\!)
+  (filter (λ (x) (string-prefix? x name-str))
+          '("Rudolf" "Hermie" "Bumble" "Yukon" "Clarise" "Santa")))]
+
 @history[#:added "1.1"]}
 
 @defproc[(readline-newline) void?]{
