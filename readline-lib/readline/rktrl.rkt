@@ -67,13 +67,13 @@
   (get-ffi-obj "readline" libreadline (_fun _string -> _string/eof/free)))
 
 (define readline-bytes
-  (get-ffi-obj "readline" libreadline (_fun _bytes -> _bytes/eof/free)))
+  (get-ffi-obj "readline" libreadline (_fun _bytes/nul-terminated -> _bytes/eof/free)))
 
 (define add-history
   (get-ffi-obj "add_history" libreadline (_fun _string -> _void)))
 
 (define add-history-bytes
-  (get-ffi-obj "add_history" libreadline (_fun _bytes -> _void)))
+  (get-ffi-obj "add_history" libreadline (_fun _bytes/nul-terminated -> _void)))
 
 (define history-length
   (let ([hl (ffi-obj #"history_length" libreadline)])
