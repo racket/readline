@@ -306,7 +306,7 @@ like this:
 Sets the cursor to the start of a new line.}
 
 
-@defproc[(readline-redisplay) void?]{
+@defproc[(readline-redisplay [#:force? force? any/c #t]) void?]{
 
 Forces a redisplay of the @|readline| prompt and current user input.
 
@@ -325,4 +325,49 @@ following:
     output-thunk
     (lambda ()
       (readline-redisplay)
-      (end-atomic))))]}
+      (end-atomic))))]
+
+When @racket[force?] is @racket[#f], updates the display to show the new
+state of the readline buffer but does not force it. This is equivalent to
+using the @tt{rl_redisplay} function from @|readline|.}
+
+
+@defproc[(readline-insert-text [text string?]) void?]{
+
+Inserts the given string at the current cursor position in the @|readline|
+buffer.}
+
+
+@defparam[readline-point point exact-integer?]{
+
+Contains the current cursor position in the @|readline| buffer. Setting
+this parameter will change the actual position in the buffer.}
+
+
+@defproc[(readline-buffer) bytes?]{
+
+Contains the current state of the @|readline| buffer. Mutating the
+resulting bytestring will mutate the actual contents of the buffer,
+which will be reflected on the screen after a redisplay.
+
+Note that the buffer will only contain the contents up to the current
+length of the buffer. If the buffer length grows due to a text insertion,
+the new text will only be visible in a newly allocated bytestring from
+another call to this function.}
+
+
+@defproc[(readline-bind-key [char-code byte?]
+                            [handler (-> exact-integer? byte? void?)])
+          void?]{
+
+Binds the key corresponding to @racket[char-code] to an action defined by
+the @racket[handler] function. The two arguments to the handler are a
+command-dependent numeric argument and the character code of the key that
+was pressed.}
+
+
+@defparam[readline-startup-hook hook (-> void?)]{
+
+Contains a procedure that is called when @|readline| is initialized.}
+
+

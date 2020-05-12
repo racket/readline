@@ -8,7 +8,11 @@
          history-length history-get history-delete
          set-completion-function!
          set-completion-append-character!
-         readline-newline readline-redisplay)
+         readline-newline readline-redisplay
+         readline-buffer readline-point
+         readline-insert-text
+         readline-bind-key
+         readline-startup-hook)
 
 ;; libncurses and/or libtermcap needed on some platforms
 (void (ffi-lib "libcurses" #:fail (lambda () #f)))
@@ -206,5 +210,30 @@
                  (get-ffi-obj "rl_newline" libreadline (_fun -> _void)))))
 
 ;; force redisplay of prompt and current user input
-(define readline-redisplay
+(define rl-forced-update-display
   (get-ffi-obj "rl_forced_update_display" libreadline (_fun -> _void)))
+(define rl-redisplay (get-ffi-obj #"rl_redisplay" libreadline (_fun -> _void)))
+
+(define (readline-redisplay #:force? [force? #t])
+  (if force?
+      (rl-forced-update-display)
+      (rl-redisplay)))
+
+;; insert text into the buffer
+(define readline-insert-text
+  (get-ffi-obj #"rl_insert_text" libreadline (_fun _string -> _void)))
+
+;; buffer-related globals
+(define readline-point  (make-c-parameter #"rl_point" libreadline _int))
+(define (readline-buffer)
+  (get-ffi-obj #"rl_line_buffer" libreadline _bytes))
+
+;; bind a key to a user-provided operation
+(define readline-bind-key
+  (get-ffi-obj #"rl_bind_key" libreadline
+               (_fun _int (_fun _int _byte -> _void)
+                     -> _void)))
+
+;; a function to call on startup for readline
+(define readline-startup-hook
+  (make-c-parameter #"rl_startup_hook" libreadline (_fun -> _void)))

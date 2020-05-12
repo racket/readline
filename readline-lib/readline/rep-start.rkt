@@ -4,9 +4,13 @@
 #lang racket/base
 
 (provide pre-readline-input-port)
-(require "pread.rkt")
+(require "pread.rkt"
+         "match-parens.rkt")
 
 (define pre-readline-input-port (current-input-port))
 ;; Change the input port and readline-prompt hook
 (current-input-port readline-input)
 (current-prompt-read read-cmdline-syntax)
+
+;; Add parenthesis matching
+(install-match-paren-bindings!)
