@@ -159,8 +159,12 @@
         (begin (set! cur (func str)) (complete #f 1))
         (and (pair? cur)
              (let* ([cur (begin0 (car cur) (set! cur (cdr cur)))]
-                    [cur (if (string? cur) (string->bytes/utf-8 cur) cur)])
-               (malloc (add1 (bytes-length cur)) cur 'raw)))))
+                    [cur (if (string? cur) (string->bytes/utf-8 cur) cur)]
+                    [len (bytes-length cur)]
+                    [p (malloc (add1 len) 'raw)])
+                 (memcpy p cur len)
+                 (ptr-set! p _byte len 0)
+                 p))))
     complete))
 
 (define (set-completion-append-character! c)
