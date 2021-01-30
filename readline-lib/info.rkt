@@ -1,7 +1,7 @@
 #lang info
 
 (define collection 'multi)
-(define deps '(["base" #:version "7.9"]))
+(define deps '(["base" #:version "8.0.0.4"]))
 
 (define pkg-desc "implementation (no documentation) part of \"readline\"")
 

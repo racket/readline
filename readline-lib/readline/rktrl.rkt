@@ -2,6 +2,7 @@
 
 (require ffi/unsafe
          ffi/unsafe/os-thread
+         ffi/unsafe/os-async-channel
          ffi/unsafe/vm
          ffi/unsafe/schedule
          ffi/unsafe/atomic
@@ -90,41 +91,12 @@
        ;; request via Scheme-level synchronization.
        (define readline-ptr (get-ffi-obj "readline" libreadline _fpointer))
        (define readline-bytes-ptr (get-ffi-obj "readline" libreadline _fpointer))
-       ;; The `current-request-box` variable is for sending requests from the readline
-       ;; Scheme thread back to the Racket thread:
-       (define current-request-box (vm-eval '(make-thread-parameter #f)))
-       ;; To send back an answer or 'escape:
-       (define (return-request-result! request-box result)
-         (define req (unbox request-box))
-         (when req
-           (define-values (proc result-box sema) (apply values req))
-           (start-atomic)
-           (set-box! result-box result)
-           (set-box! request-box #f)
-           (os-semaphore-post sema)
-           (end-atomic)))
-       ;; Poller for read-char/read-byte requests:
-       (struct request-evt (request-box)
-         #:property prop:evt (unsafe-poller
-                              (lambda (self wakeups)
-                                (define ready? (unbox (request-evt-request-box self)))
-                                (if ready?
-                                    (values (list self) #f)
-                                    (values #f self)))))
-       ;; Poller for a readline result:
-       (struct box-evt (b)
-         #:property prop:evt (unsafe-poller
-                              (lambda (self wakeups)
-                                (if (unbox (box-evt-b self))
-                                    (values (list self) #f)
-                                    (values #f self)))))
-       ;; Used to make sure a poller is polled
-       ;; (should have been provided by `ffi/unsafe/schedule`):
-       (define unsafe-make-signal-received (vm-primitive 'unsafe-make-signal-received))
-       (define signal-received (unsafe-make-signal-received))
+       ;; A `context` struct communicates information about an enclosing
+       ;; `readline` request to the callback installed for reading characters/bytes:
+       (struct context (request-ch response-ch break-esc))
+       (define current-context (vm-eval '(make-thread-parameter #f)))
        ;; To handle errors/breaks, we'll arrange for a request to
        ;; jump out of an enclosing `readline` call:
-       (define current-break-esc (vm-eval '(make-thread-parameter #f)))
        (define call-with-exit-proc
          ;; From the Chez Scheme manual, causes a continuation jump to pop C frames:
          (vm-eval '(lambda (p)
@@ -144,9 +116,6 @@
        ;; Wrapper for a readline proc:
        (define (make-readline readline to-bytes _result)
          (lambda (prompt)
-           (define result-box (box #f))
-           (define request-box (box #f))
-           (define done-sema (make-os-semaphore))
            ;; Convert prompt to an immobile, nul-terminated byte array:
            (define prompt-bytes (to-bytes prompt))
            (define len (bytes-length prompt-bytes))
@@ -154,16 +123,22 @@
            (memcpy prompt-mem prompt-bytes len)
            (ptr-set! prompt-mem _byte len 0)
            (define prompt-addr (cast prompt-mem _pointer _uintptr))
+           ;; Request to Scheme thread for reading characters:
+           (define request-ch (make-os-async-channel))
+           ;; Response from Scheme thread reading characters:
+           (define response-ch (make-os-async-channel))
+           ;; Response from readline thread (which sends requests to Scheme thread
+           ;; and receives its responses):
+           (define readline-ch (make-os-async-channel))
            ;; Start a Racket thread can can serve `read-char`/`read-byte` requests,
            ;; of which there is at most one active at a time:
            (define request-server
              (thread
               (lambda ()
                 (let loop ()
-                  (sync (request-evt request-box))
-                  (define proc (car (unbox request-box)))
+                  (define proc (sync request-ch))
                   (define result (proc))
-                  (return-request-result! request-box result)
+                  (os-async-channel-put response-ch result)
                   (loop)))))
            ;; Run readline in a new thread:
            (call-in-os-thread
@@ -171,10 +146,8 @@
               ;; in non-Racket Scheme thread
               (call-with-exit-proc
                (lambda (k)
-                 (current-request-box request-box)
-                 (current-break-esc k)
-                 (set-box! result-box (readline prompt-addr))
-                 (signal-received)
+                 (current-context (context request-ch response-ch k))
+                 (os-async-channel-put readline-ch (readline prompt-addr))
                  (void/reference-sink prompt-mem)))))
            ;; Wait for the result, and on escape (due to an error or
            ;; break), communicate the escape also to any request in
@@ -182,30 +155,24 @@
            (dynamic-wind
             void
             (lambda ()
-              (sync (box-evt result-box))
+              (define addr (sync readline-ch))
               ;; Convert result to a [byte] string:
-              (define addr (unbox result-box))
               (cast addr _uintptr _result))
             (lambda ()
               (kill-thread request-server)
               (set! request-server #f)
-              (return-request-result! request-box 'escape)))))
+              ;; On behalf of `request-server`, reply with 'escape:
+              (os-async-channel-put response-ch 'escape)))))
        (define (make-reader read-byte-or-char)
          ;; Called in a non-Racket Scheme thread:
          (lambda (input-port)
-           (define done-sema (make-os-semaphore))
-           (define result-box (box #f))
-           ;; Bounce the reqeust over to the current request-handler
+           (define ctx (current-context))
+           ;; Bounce the request over to the current request-handler
            ;; Racket thread by using the current thread's request box
-           (set-box! (current-request-box)
-                     (list (lambda () (read-byte-or-char input-port))
-                           result-box
-                           done-sema))
-           (signal-received) ; make sure server thread polls the request box
-           (os-semaphore-wait done-sema)
-           (define result (unbox result-box))
+           (os-async-channel-put (context-request-ch ctx) (lambda () (read-byte-or-char input-port)))
+           (define result (os-async-channel-get (context-response-ch ctx)))
            (if (eq? result 'escape)
-               ((current-break-esc) #f)
+               ((context-break-esc ctx) #f)
                result)))
        (values (make-readline (proc-ptr-to-proc readline-ptr) string->bytes/utf-8 _string/eof/free)
                (make-readline (proc-ptr-to-proc readline-bytes-ptr) values _bytes/eof/free)
